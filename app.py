@@ -3,6 +3,7 @@ from time import mktime
 
 from flask import Flask, request, make_response, jsonify
 import jwt
+from jwt.exceptions import DecodeError
 import requests
 
 from secrets import api_auth_token, jwt_secret_key
@@ -32,6 +33,7 @@ def encode_auth_token(user_id, name, email, scopes):
         'exp': mktime((datetime.datetime.now() + datetime.timedelta(days=1)).timetuple())
     }
 
+    # didn't end up needing to decode, result already a string
     encoded_payload = jwt.encode(payload, jwt_secret_key, algorithm="HS256")
     return encoded_payload
 
@@ -41,19 +43,14 @@ def get_user_from_token():
     # should pull token from the Authorization header
     # Authorization: Bearer {token}
     # Where {token} is the token created by the login route
-    auth_header = request.headers.get('Authorization')
-    if auth_header:
-        try:
-            auth_token = auth_header.split(" ")[1]
-        except IndexError:
-            response_object = { 'Error': 'Invalid bearer token' }
-            return make_response(jsonify(response_object)), 401
-    else:
-        auth_token = ''
-    
+    auth_token = request.headers.get('Authorization')
     if auth_token:
-        user = decode_auth_token(auth_token)
-        return user
+        try:
+            user = decode_auth_token(auth_token)
+            return user
+        except DecodeError:
+            response_object = { 'Error': 'Invalid authorization token' }
+            return make_response(jsonify(response_object)), 401
     else:
         response_object = { 'Error': 'Missing authorization token' }
         return make_response(jsonify(response_object)), 401
@@ -68,7 +65,7 @@ def status():
 def user():
     # get the user data from the auth/header/jwt
     response = get_user_from_token()
-    if 'sub' in response.keys():
+    if type(response) == dict:
         return {
             'user_id': response.get('sub'),
             'name': response.get('name'),
@@ -91,7 +88,7 @@ def login():
     try:
         users = get_user_by_email(login_email)
         user_id = users.get('id')
-        user_name = users.get('id')
+        user_name = users.get('name')
         
         auth_token = encode_auth_token(user_id, user_name, login_email, login_scopes)
         
