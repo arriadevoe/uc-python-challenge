@@ -15,7 +15,8 @@ app = Flask(__name__)
 def decode_auth_token(auth_token):
     # use jwt, jwt_secret_key
     # should be a one liner, but we want you to see how JWTs work
-    pass
+    decoded_token = jwt.decode(auth_token, jwt_secret_key, algorithms="HS256")
+    return decoded_token
 
 
 def encode_auth_token(user_id, name, email, scopes):
@@ -30,6 +31,10 @@ def encode_auth_token(user_id, name, email, scopes):
         'scope': scopes,
         'exp': mktime((datetime.datetime.now() + datetime.timedelta(days=1)).timetuple())
     }
+
+    encoded_payload = jwt.encode(payload, kejwt_secret_keyy, algorithm="HS256").decode("utf-8")
+    return encoded_payload
+
 
 
 def get_user_from_token():
