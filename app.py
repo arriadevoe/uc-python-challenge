@@ -1,7 +1,7 @@
 import datetime
 from time import mktime
 
-from flask import Flask, request
+from flask import Flask, request, make_response, jsonify
 import jwt
 import requests
 
@@ -32,7 +32,7 @@ def encode_auth_token(user_id, name, email, scopes):
         'exp': mktime((datetime.datetime.now() + datetime.timedelta(days=1)).timetuple())
     }
 
-    encoded_payload = jwt.encode(payload, kejwt_secret_keyy, algorithm="HS256").decode("utf-8")
+    encoded_payload = jwt.encode(payload, jwt_secret_key, algorithm="HS256").decode("utf-8")
     return encoded_payload
 
 
@@ -42,8 +42,22 @@ def get_user_from_token():
     # should pull token from the Authorization header
     # Authorization: Bearer {token}
     # Where {token} is the token created by the login route
-    pass
-
+    auth_header = request.headers.get('Authorization')
+    if auth_header:
+        try:
+            auth_token = auth_header.split(" ")[1]
+        except IndexError:
+            response_object = { 'Error': 'Invalid bearer token' }
+            return make_response(jsonify(response_object)), 401
+    else:
+        auth_token = ''
+    
+    if auth_token:
+            user = decode_auth_token(auth_token)
+            return user
+    else:
+            response_object = { 'Error': 'Missing authorization token' }
+            return make_response(jsonify(response_object)), 401
 
 @app.route('/')
 def status():
