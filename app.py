@@ -67,11 +67,15 @@ def status():
 @app.route('/user', methods=['GET'])
 def user():
     # get the user data from the auth/header/jwt
-    return {
-        'user_id': '',
-        'name': '',
-        'email': ''
-    }
+    response = get_user_from_token()
+    if 'sub' in response.keys():
+        return {
+            'user_id': response.get('sub'),
+            'name': response.get('name'),
+            'email': response.get('email')
+        }
+    else:
+        return response
 
 
 @app.route('/login', methods=['POST'])
