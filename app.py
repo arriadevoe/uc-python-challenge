@@ -32,9 +32,8 @@ def encode_auth_token(user_id, name, email, scopes):
         'exp': mktime((datetime.datetime.now() + datetime.timedelta(days=1)).timetuple())
     }
 
-    encoded_payload = jwt.encode(payload, jwt_secret_key, algorithm="HS256").decode("utf-8")
+    encoded_payload = jwt.encode(payload, jwt_secret_key, algorithm="HS256")
     return encoded_payload
-
 
 
 def get_user_from_token():
@@ -58,6 +57,7 @@ def get_user_from_token():
     else:
         response_object = { 'Error': 'Missing authorization token' }
         return make_response(jsonify(response_object)), 401
+
 
 @app.route('/')
 def status():
@@ -88,19 +88,19 @@ def login():
     login_email = request_body.get('email')
     login_scopes = request_body.get('scopes')
 
-    users = get_user_by_email(login_email)
-
-    if len(users) == 1:
-        user_id = users[0].get('id')
-        user_name = users[0].get('id')
+    try:
+        users = get_user_by_email(login_email)
+        user_id = users.get('id')
+        user_name = users.get('id')
+        
         auth_token = encode_auth_token(user_id, user_name, login_email, login_scopes)
-    else:
+        
+        return {
+            'token': auth_token
+        }
+    except IndexError:
         response_object = { 'Error': 'Unable to login' }
         return make_response(jsonify(response_object)), 401
-
-    return {
-        'token': auth_token
-    }
 
 
 @app.route('/widgets', methods=['GET'])
