@@ -53,11 +53,11 @@ def get_user_from_token():
         auth_token = ''
     
     if auth_token:
-            user = decode_auth_token(auth_token)
-            return user
+        user = decode_auth_token(auth_token)
+        return user
     else:
-            response_object = { 'Error': 'Missing authorization token' }
-            return make_response(jsonify(response_object)), 401
+        response_object = { 'Error': 'Missing authorization token' }
+        return make_response(jsonify(response_object)), 401
 
 @app.route('/')
 def status():
@@ -80,8 +80,22 @@ def login():
     # use the get_user_by_email function to get the user data
     # return a the encoded json web token as a token property on the json response as in the format below
     # we're not actually validitating a password or anything because that would add unneeded complexity
+    request_body = request.get_json()
+    login_email = request_body.get('email')
+    login_scopes = request_body.get('scopes')
+
+    users = get_user_by_email(login_email)
+
+    if len(users) == 1:
+        user_id = users[0].get('id')
+        user_name = users[0].get('id')
+        auth_token = encode_auth_token(user_id, user_name, login_email, login_scopes)
+    else:
+        response_object = { 'Error': 'Unable to login' }
+        return make_response(jsonify(response_object)), 401
+
     return {
-        'token': ''
+        'token': auth_token
     }
 
 
