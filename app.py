@@ -122,17 +122,69 @@ def widgets():
 
     # filter the results by the query parameters
     # return the data in the format below
+    get_user_response = get_user_from_token()
+    if type(get_user_response) == dict:
+        user_id = get_user_response.get('sub')
+        scopes = get_user_response.get('scope')
+        if 'widgets' not in scopes:
+            response_object = { 'Error': 'User does not have widgets scope' }
+            return make_response(jsonify(response_object)), 401
+    else:
+        return get_user_response
+
+    response = requests.get(
+        'https://us-central1-interview-d93bf.cloudfunctions.net/widgets',
+        headers={'Authorization': f'apiKey {api_auth_token}'},
+        params={'user_id': user_id}
+    )
+
+    json_response = response.json()
+    filtered_response = []
+    
+    query_params = dict(request.args)
+    query_keys = list(query_params.keys())
+
+    if {'type', 'created_start', 'created_end'} == set(query_keys):
+        for widget in json_response:
+            created = parse_date_time(widget['created'])
+            created_start = parse_date_time(query_params['created_start'])
+            created_end = parse_date_time(query_params['created_end'])
+            if widget['type'] == query_params['type'] and created >= created_start and created <= created_end:
+                filtered_response.append(widget)
+    elif {'type', 'created_start'} == set(query_keys):
+        for widget in json_response:
+            created = parse_date_time(widget['created'])
+            created_start = parse_date_time(query_params['created_start'])
+            if widget['type'] == query_params['type'] and created >= created_start:
+                filtered_response.append(widget)
+    elif {'type', 'created_end'} == set(query_keys):
+        for widget in json_response:
+            created = parse_date_time(widget['created'])
+            created_end = parse_date_time(query_params['created_end'])
+            if widget['type'] == query_params['type'] and created <= created_end:
+                filtered_response.append(widget)
+    elif {'created_start', 'created_end'} == set(query_keys):
+        for widget in json_response:
+            created = parse_date_time(widget['created'])
+            created_start = parse_date_time(query_params['created_start'])
+            created_end = parse_date_time(query_params['created_end'])
+            if created >= created_start and created <= created_end:
+                filtered_response.append(widget)
+    elif ['type'] == query_keys:
+        filtered_response = [widget for widget in json_response if widget['type'] == query_params['type']]
+    elif ['created_start'] == query_keys:
+        filtered_response = [widget for widget in json_response if parse_date_time(widget['created']) >= parse_date_time(query_params['created_start'])]
+    elif ['created_end'] == query_keys:
+        filtered_response = [widget for widget in json_response if parse_date_time(widget['created']) <= parse_date_time(query_params['created_end'])]
+    else:
+        filtered_response = json_response
+
+    for widget in filtered_response:
+        widget['type_label'] = widget['type'].replace('-',' ').title()
 
     return {
-        'total_widgets_own_by_user': 2,
-        'matching_items': [
-            {
-                "id": 0,
-                "type": "foo-bar",
-                "type_label": "Foo Bar",  # replace dashes with spaces and capitalize words
-                "created": datetime.datetime.now().isoformat(), # remember to replace
-            }
-        ]
+        'total_widgets_own_by_user': len(filtered_response),
+        'matching_items': filtered_response
     }
 
 
