@@ -26,16 +26,18 @@ def encode_auth_token(user_id, name, email, scopes):
     # remember to convert the result of jwt.encode to a string
     # make sure to use .decode("utf-8") rather than str() for this
     payload = {
-        'sub': user_id,
-        'name': name,
-        'email': email,
-        'scope': scopes,
-        'exp': mktime((datetime.datetime.now() + datetime.timedelta(days=1)).timetuple())
+        "sub": user_id,
+        "name": name,
+        "email": email,
+        "scope": scopes,
+        "exp": mktime(
+            (datetime.datetime.now() + datetime.timedelta(days=1)).timetuple()
+        ),
     }
 
     # didn't end up needing to decode, result already a string
-    encoded_payload = jwt.encode(payload, jwt_secret_key, algorithm="HS256")
-    return encoded_payload
+    encoded_token = jwt.encode(payload, jwt_secret_key, algorithm="HS256")
+    return encoded_token
 
 
 def get_user_from_token():
@@ -43,64 +45,61 @@ def get_user_from_token():
     # should pull token from the Authorization header
     # Authorization: Bearer {token}
     # Where {token} is the token created by the login route
-    auth_token = request.headers.get('Authorization')
+    auth_token = request.headers.get("Authorization")
     if auth_token:
         try:
-            user = decode_auth_token(auth_token)
-            return user
+            user_data = decode_auth_token(auth_token)
+            return user_data
         except DecodeError:
-            response_object = { 'Error': 'Invalid authorization token' }
+            response_object = {"Error": "Invalid authorization token"}
             return make_response(jsonify(response_object)), 401
     else:
-        response_object = { 'Error': 'Missing authorization token' }
+        response_object = {"Error": "Missing authorization token"}
         return make_response(jsonify(response_object)), 401
 
 
-@app.route('/')
+@app.route("/")
 def status():
-    return 'API Is Up'
+    return "API Is Up"
 
 
-@app.route('/user', methods=['GET'])
+@app.route("/user", methods=["GET"])
 def user():
     # get the user data from the auth/header/jwt
     response = get_user_from_token()
     if type(response) == dict:
         return {
-            'user_id': response.get('sub'),
-            'name': response.get('name'),
-            'email': response.get('email')
+            "user_id": response.get("sub"),
+            "name": response.get("name"),
+            "email": response.get("email"),
         }
     else:
         return response
 
 
-@app.route('/login', methods=['POST'])
+@app.route("/login", methods=["POST"])
 def login():
     # use use flask.request to get the json body and get the email and scopes property
     # use the get_user_by_email function to get the user data
     # return a the encoded json web token as a token property on the json response as in the format below
     # we're not actually validitating a password or anything because that would add unneeded complexity
     request_body = request.get_json()
-    login_email = request_body.get('email')
-    login_scopes = request_body.get('scopes')
+    login_email = request_body.get("email")
+    login_scopes = request_body.get("scopes")
 
     try:
         users = get_user_by_email(login_email)
-        user_id = users.get('id')
-        user_name = users.get('name')
-        
+        user_id = users.get("id")
+        user_name = users.get("name")
+
         auth_token = encode_auth_token(user_id, user_name, login_email, login_scopes)
-        
-        return {
-            'token': auth_token
-        }
+        return {"token": auth_token}
     except IndexError:
-        response_object = { 'Error': 'Unable to login' }
+        response_object = {"Error": "Unable to login"}
         return make_response(jsonify(response_object)), 401
 
 
-@app.route('/widgets', methods=['GET'])
+@app.route("/widgets", methods=["GET"])
 def widgets():
     # accept the following optional query parameters (using the the flask.request object to get the query params)
     # type, created_start, created_end
@@ -124,69 +123,88 @@ def widgets():
     # return the data in the format below
     get_user_response = get_user_from_token()
     if type(get_user_response) == dict:
-        user_id = get_user_response.get('sub')
-        scopes = get_user_response.get('scope')
-        if 'widgets' not in scopes:
-            response_object = { 'Error': 'User does not have widgets scope' }
+        user_id = get_user_response.get("sub")
+        scopes = get_user_response.get("scope")
+        if "widgets" not in scopes:
+            response_object = {"Error": "User does not have widgets scope"}
             return make_response(jsonify(response_object)), 401
     else:
         return get_user_response
 
     response = requests.get(
-        'https://us-central1-interview-d93bf.cloudfunctions.net/widgets',
-        headers={'Authorization': f'apiKey {api_auth_token}'},
-        params={'user_id': user_id}
+        "https://us-central1-interview-d93bf.cloudfunctions.net/widgets",
+        headers={"Authorization": f"apiKey {api_auth_token}"},
+        params={"user_id": user_id},
     )
 
     json_response = response.json()
-    filtered_response = []
-    
     query_params = dict(request.args)
     query_keys = list(query_params.keys())
 
-    if {'type', 'created_start', 'created_end'} == set(query_keys):
-        for widget in json_response:
-            created = parse_date_time(widget['created'])
-            created_start = parse_date_time(query_params['created_start'])
-            created_end = parse_date_time(query_params['created_end'])
-            if widget['type'] == query_params['type'] and created >= created_start and created <= created_end:
-                filtered_response.append(widget)
-    elif {'type', 'created_start'} == set(query_keys):
-        for widget in json_response:
-            created = parse_date_time(widget['created'])
-            created_start = parse_date_time(query_params['created_start'])
-            if widget['type'] == query_params['type'] and created >= created_start:
-                filtered_response.append(widget)
-    elif {'type', 'created_end'} == set(query_keys):
-        for widget in json_response:
-            created = parse_date_time(widget['created'])
-            created_end = parse_date_time(query_params['created_end'])
-            if widget['type'] == query_params['type'] and created <= created_end:
-                filtered_response.append(widget)
-    elif {'created_start', 'created_end'} == set(query_keys):
-        for widget in json_response:
-            created = parse_date_time(widget['created'])
-            created_start = parse_date_time(query_params['created_start'])
-            created_end = parse_date_time(query_params['created_end'])
-            if created >= created_start and created <= created_end:
-                filtered_response.append(widget)
-    elif ['type'] == query_keys:
-        filtered_response = [widget for widget in json_response if widget['type'] == query_params['type']]
-    elif ['created_start'] == query_keys:
-        filtered_response = [widget for widget in json_response if parse_date_time(widget['created']) >= parse_date_time(query_params['created_start'])]
-    elif ['created_end'] == query_keys:
-        filtered_response = [widget for widget in json_response if parse_date_time(widget['created']) <= parse_date_time(query_params['created_end'])]
+    if {"type", "created_start", "created_end"} == set(query_keys):
+        filtered_response = [
+            widget
+            for widget in json_response
+            if widget["type"] == query_params["type"]
+            and parse_date_time(widget["created"])
+            >= parse_date_time(query_params["created_start"])
+            and parse_date_time(widget["created"])
+            <= parse_date_time(query_params["created_end"])
+        ]
+    elif {"type", "created_start"} == set(query_keys):
+        filtered_response = [
+            widget
+            for widget in json_response
+            if widget["type"] == query_params["type"]
+            and parse_date_time(widget["created"])
+            >= parse_date_time(query_params["created_start"])
+        ]
+    elif {"type", "created_end"} == set(query_keys):
+        filtered_response = [
+            widget
+            for widget in json_response
+            if widget["type"] == query_params["type"]
+            and parse_date_time(widget["created"])
+            <= parse_date_time(query_params["created_end"])
+        ]
+    elif {"created_start", "created_end"} == set(query_keys):
+        filtered_response = [
+            widget
+            for widget in json_response
+            if parse_date_time(widget["created"])
+            >= parse_date_time(query_params["created_start"])
+            and parse_date_time(widget["created"])
+            <= parse_date_time(query_params["created_end"])
+        ]
+    elif ["type"] == query_keys:
+        filtered_response = [
+            widget for widget in json_response if widget["type"] == query_params["type"]
+        ]
+    elif ["created_start"] == query_keys:
+        filtered_response = [
+            widget
+            for widget in json_response
+            if parse_date_time(widget["created"])
+            >= parse_date_time(query_params["created_start"])
+        ]
+    elif ["created_end"] == query_keys:
+        filtered_response = [
+            widget
+            for widget in json_response
+            if parse_date_time(widget["created"])
+            <= parse_date_time(query_params["created_end"])
+        ]
     else:
         filtered_response = json_response
 
     for widget in filtered_response:
-        widget['type_label'] = widget['type'].replace('-',' ').title()
+        widget["type_label"] = widget["type"].replace("-", " ").title()
 
     return {
-        'total_widgets_own_by_user': len(filtered_response),
-        'matching_items': filtered_response
+        "total_widgets_owned_by_user": len(filtered_response),
+        "matching_items": filtered_response,
     }
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
